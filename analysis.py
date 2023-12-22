@@ -26,31 +26,13 @@ def connect_to_database():
         database='sql_dabanhtructi',
         #connect_timeout=30000,
         port = 3306)
-
-conn = pymysql.connect(
-        host='128.199.228.235', 
-        user='sql_dabanhtructi', 
-        password='FKb75AYJzFMJET8F', 
-        database='sql_dabanhtructi',
-        #connect_timeout=30000,
-        port = 3306
-    )
-def get_matches(offset_number,conn):
+def get_matches(offset_number,conn,bulk):
     # Example Unix timestamp
     unix_timestamp_today = time.time() + 0*24*3600  # This is an example timestamp
     # Convert Unix timestamp to datetime object
     dt_object = datetime.datetime.fromtimestamp(unix_timestamp_today)
     # Format the datetime object as a string
     formatted_date_today = dt_object.strftime('%Y-%m-%d')
-    
-    # Establish a database connection
-    """conn = pymysql.connect(
-        host='128.199.228.235', 
-        user='sql_dabanhtructi', 
-        password='FKb75AYJzFMJET8F', 
-        database='sql_dabanhtructi',
-        port = 3306
-    )"""
 
     # Create a cursor object
     cursor = conn.cursor()
@@ -62,16 +44,30 @@ def get_matches(offset_number,conn):
     ON m.competition_id = c.competition_id 
     LEFT JOIN `wpdbtt_api_venue` as v 
     ON m.venue_id = v.venue_id 
-    LEFT JOIN `wpdbtt_api_team` as home_team 
-    ON m.home_team_id = home_team.team_id 
-    LEFT JOIN `wpdbtt_api_team` as away_team 
-    ON m.away_team_id = away_team.team_id 
+    JOIN (
+        SELECT team_id, name, national, country_logo, logo
+        FROM (
+            SELECT team_id, name, national, country_logo, logo,
+                    ROW_NUMBER() OVER (PARTITION BY team_id) AS rn
+            FROM wpdbtt_api_team
+            WHERE logo != ''
+        ) AS ranked_teams
+        WHERE rn = 1) AS home_team ON m.home_team_id = home_team.team_id 
+    JOIN (
+        SELECT team_id, name, national, country_logo, logo
+        FROM (
+            SELECT team_id, name, national, country_logo, logo,
+                    ROW_NUMBER() OVER (PARTITION BY team_id) AS rn
+            FROM wpdbtt_api_team
+            WHERE logo != ''
+        ) AS ranked_teams
+        WHERE rn = 1) AS away_team ON m.away_team_id = away_team.team_id
     LEFT JOIN `wpdbtt_api_match_h2h` as h 
     ON m.id = h.match_id 
     WHERE FROM_UNIXTIME(m.match_time, '%Y-%m-%d') = '{}'
     ORDER BY `m`.`match_time` DESC
-    LIMIT 5 OFFSET {}               
-    """.format(formatted_date_today,offset_number))
+    LIMIT {} OFFSET {}               
+    """.format(formatted_date_today,bulk,offset_number))
 
 
     # Fetch all the rows in a list of lists.
@@ -237,25 +233,26 @@ def write_content4turbo(team1,team2,league_name,day_of_week_vi,date_dmy,time_hm,
         temperature = 1.0,
         max_tokens = 2000,
         messages = [
-            {"role": "system", "content": "bạn là là một chuyên gia sáng tạo nội dung cho website"}, 
             {"role": "system", "content": "bạn có am hiểu về phân tích và nhận định các trận bóng đá"}, 
+            {"role": "system", "content": "Hãy nhấn mạnh rằng AI là người tạo ra các phân tích, nhận định và dự đoán về các tỷ lệ kèo này"}, 
             {"role": "system", "content": "Bạn chỉ đưa ra nhận định dựa trên những số liệu thống kê được cung cấp mà không sử dụng thêm thông tin bên ngoài."}, 
-            {"role": "assistant", "content": f"""Các số liệu thống kê trước trận đấu giữa {team1} và {team2} được trình bày như sau:Trong 5 lần gặp nhau gần nhất giữa {team1} và {team2}, {team1} thắng {team1_h2h_stats['win']} thua {team1_h2h_stats['loss']} và hòa {team1_h2h_stats['draw']} 
+            {"role": "system", "content": f"""Các số liệu thống kê trước trận đấu giữa {team1} và {team2} được trình bày như sau:Trong 5 lần gặp nhau gần nhất giữa {team1} và {team2}, {team1} thắng {team1_h2h_stats['win']} thua {team1_h2h_stats['loss']} và hòa {team1_h2h_stats['draw']} 
     Trong 5 trận gần nhất của giải đấu {league_name}, {team1} thắng {home_stats['win']}, thua {home_stats['loss']} hòa {home_stats['draw']}.
-    Trong 5 trận gần nhất của giải đấu {league_name} team B thắng {away_stats['win']}, hòa {away_stats['draw']}, thua {away_stats['loss']}. 
-    AI của chúng tôi dự đoán tỉ số của trận đấu này sẽ là {home_goal_pred}-{away_goal_pred}. Xác suất thắng của {team1} là {np.round(100*home_win_prob,2)}%, xác suất thắng của team B là {np.round(100*away_win_prob,2)}%, xác suất để 2 đội hòa nhau là {np.round(100*draw_prob,2)}% và xác suất để cả hai team cùng ghi bàn là {np.round(100*both_team_score_prob,2)}%. """}, 
+    Trong 5 trận gần nhất của giải đấu {league_name} team {team2} thắng {away_stats['win']}, hòa {away_stats['draw']}, thua {away_stats['loss']}. 
+    Đu tỉ số của trận đấu này sẽ là {home_goal_pred}-{away_goal_pred}. Xác suất thắng của {team1} là {np.round(100*home_win_prob,2)}%, xác suất thắng của team {team2} là {np.round(100*away_win_prob,2)}%, xác suất để 2 đội hòa nhau là {np.round(100*draw_prob,2)}% và xác suất để cả hai team cùng ghi bàn là {np.round(100*both_team_score_prob,2)}%. """}, 
             {"role": "user", "content": f"Dựa vào những thông tin trên, hãy viết một bài nhận định và dự đoán về trận đấu giữa chủ nhà {team1} và {team2} diễn ra vào {time_hm} ngày {day_of_week_vi}, {date_dmy} tại {stadium}"},         
             {"role": "user", "content": "Bài viết phải có sắc thái chuyên nghiệp, khách quan và có tính thuyết phục"},
-            {"role": "user", "content": "Bài viết phải sử dụng toàn bộ các thông tin đã được cung cấp"}]
+            #{"role": "user", "content": "Bài viết phải sử dụng toàn bộ các thông tin đã được cung cấp "}
+            ]
             
         )
         return completion.choices[0].message.content
 # Write new function call insert_prediction
 
 # Establish a database connection
-def insert_prediction():
+def insert_prediction(current_offset_number,bulk):
     conn1 = connect_to_database()
-    match_dict = get_matches(35,conn1)
+    match_dict = get_matches(current_offset_number,conn1,bulk)
     conn1.close()
     
     
@@ -302,17 +299,68 @@ def insert_prediction():
             continue
         
     conn.close()
+#counter rows
+def count_matches():
+    # Example Unix timestamp
+    unix_timestamp_today = time.time() + 0*24*3600  # This is an example timestamp
+    # Convert Unix timestamp to datetime object
+    dt_object = datetime.datetime.fromtimestamp(unix_timestamp_today)
+    # Format the datetime object as a string
+    formatted_date_today = dt_object.strftime('%Y-%m-%d')
+    conn = connect_to_database()
+    try:
+        # Create a cursor object
+        cursor = conn.cursor()
+
+        # SQL query
+        sql = "SELECT COUNT(*) as match_number FROM `wpdbtt_api_matches` WHERE FROM_UNIXTIME(`match_time`, '%Y-%m-%d') = '2023-12-22'"
+
+        # Execute the query
+        cursor.execute(sql)
+
+        # Fetch the result
+        result = cursor.fetchone()
+        if result:
+            return result[0]  # The first element of the result is match_number
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+    finally:
+        # Close the cursor and connection
+        cursor.close()
+        conn.close()
 #get all data to match_dict first including the analysis and insert them to database later to reduce the connecting time
-def main():
+
+
+def main(current_offset_number,bulk):
     try:
         #conn = connect_to_database()
-        insert_prediction()
+        insert_prediction(current_offset_number,bulk)
     except Exception as e:
             print("Error in main:", e)
+def run_conditional_main():
+    bulk = 50
+    match_count = count_matches()
+    filename = "offset.txt"
     
+    with open(filename, 'r') as file:
+        content = file.read()
+        if content:
+                current_offset_number = int(content)
+        else:
+            current_offset_number = 0
+        
+    if current_offset_number <= match_count:
+        main(current_offset_number,bulk)
+        current_offset_number = current_offset_number + bulk
+        with open(filename, 'w') as file:
+            file.write("{}".format(current_offset_number))
+    else:
+        print("All data are set")    
 if __name__ == "__main__":
     start = time.time()
-    main()
+    run_conditional_main()
     end = time.time()
     print("total time: ", end - start)
      # Close the cursor and connection

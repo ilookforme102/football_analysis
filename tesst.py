@@ -1,4 +1,4 @@
-from openai import OpenAI
+"""from openai import OpenAI
 import openai
 import time
 import numpy as np
@@ -7,25 +7,67 @@ import math
 import pymysql
 import os
 import datetime
-
-# Get API KEY
-from dotenv import load_dotenv
-import os
-load_dotenv() 
-api_key = os.getenv('OPENAI_API_KEY')
-client = OpenAI(
-        # defaults to os.environ.get("OPENAI_API_KEY")
-        api_key=api_key,
-    )
-conn = pymysql.connect(
+def connect_to_database():
+    # Modify with your database connection details
+    return pymysql.connect(
         host='128.199.228.235', 
         user='sql_dabanhtructi', 
         password='FKb75AYJzFMJET8F', 
         database='sql_dabanhtructi',
         #connect_timeout=30000,
-        port = 3306
-    )
-def get_matches(offset_number):
+        port = 3306)
+
+def count_matches():
+    # Example Unix timestamp
+    unix_timestamp_today = time.time() + 0*24*3600  # This is an example timestamp
+    # Convert Unix timestamp to datetime object
+    dt_object = datetime.datetime.fromtimestamp(unix_timestamp_today)
+    # Format the datetime object as a string
+    formatted_date_today = dt_object.strftime('%Y-%m-%d')
+    conn = connect_to_database()
+    try:
+        # Create a cursor object
+        cursor = conn.cursor()
+
+        # SQL query
+        sql = "SELECT COUNT(*) as match_number FROM `wpdbtt_api_matches` WHERE FROM_UNIXTIME(`match_time`, '%Y-%m-%d') = '2023-12-22'"
+
+        # Execute the query
+        cursor.execute(sql)
+
+        # Fetch the result
+        result = cursor.fetchone()
+        if result:
+            return result[0]  # The first element of the result is match_number
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+    finally:
+        # Close the cursor and connection
+        cursor.close()
+        conn.close()
+t = count_matches()
+print(t)"""
+import openai
+import time
+import numpy as np
+import json
+import math
+import pymysql
+import os
+import datetime
+def connect_to_database():
+    # Modify with your database connection details
+    return pymysql.connect(
+        host='128.199.228.235', 
+        user='sql_dabanhtructi', 
+        password='FKb75AYJzFMJET8F', 
+        database='sql_dabanhtructi',
+        #connect_timeout=30000,
+        port = 3306)
+conn = connect_to_database()
+def get_matches(offset_number,conn,bulk):
     # Example Unix timestamp
     unix_timestamp_today = time.time() + 0*24*3600  # This is an example timestamp
     # Convert Unix timestamp to datetime object
@@ -33,14 +75,7 @@ def get_matches(offset_number):
     # Format the datetime object as a string
     formatted_date_today = dt_object.strftime('%Y-%m-%d')
     
-    # Establish a database connection
-    """conn = pymysql.connect(
-        host='128.199.228.235', 
-        user='sql_dabanhtructi', 
-        password='FKb75AYJzFMJET8F', 
-        database='sql_dabanhtructi',
-        port = 3306
-    )"""
+
 
     # Create a cursor object
     cursor = conn.cursor()
@@ -52,16 +87,30 @@ def get_matches(offset_number):
     ON m.competition_id = c.competition_id 
     LEFT JOIN `wpdbtt_api_venue` as v 
     ON m.venue_id = v.venue_id 
-    LEFT JOIN `wpdbtt_api_team` as home_team 
-    ON m.home_team_id = home_team.team_id 
-    LEFT JOIN `wpdbtt_api_team` as away_team 
-    ON m.away_team_id = away_team.team_id 
+    JOIN (
+        SELECT team_id, name, national, country_logo, logo
+        FROM (
+            SELECT team_id, name, national, country_logo, logo,
+                    ROW_NUMBER() OVER (PARTITION BY team_id) AS rn
+            FROM wpdbtt_api_team
+            WHERE logo != ''
+        ) AS ranked_teams
+        WHERE rn = 1) AS home_team ON m.home_team_id = home_team.team_id 
+    JOIN (
+        SELECT team_id, name, national, country_logo, logo
+        FROM (
+            SELECT team_id, name, national, country_logo, logo,
+                    ROW_NUMBER() OVER (PARTITION BY team_id) AS rn
+            FROM wpdbtt_api_team
+            WHERE logo != ''
+        ) AS ranked_teams
+        WHERE rn = 1) AS away_team ON m.away_team_id = away_team.team_id
     LEFT JOIN `wpdbtt_api_match_h2h` as h 
     ON m.id = h.match_id 
     WHERE FROM_UNIXTIME(m.match_time, '%Y-%m-%d') = '{}'
     ORDER BY `m`.`match_time` DESC
-    LIMIT 40 OFFSET {}               
-    """.format(formatted_date_today,offset_number))
+    LIMIT {} OFFSET {}               
+    """.format(formatted_date_today,bulk,offset_number))
 
 
     # Fetch all the rows in a list of lists.
@@ -83,6 +132,7 @@ def get_matches(offset_number):
             }
         if row[8] is not None and row[9] is not None:
             match_dict[index] = item
+            print(match_dict[index]['match_id']) 
     return match_dict
 def get_match_info(match_data):
     try:
@@ -220,144 +270,14 @@ def get_match_info(match_data):
         both_team_score_prob = 1 - sum(both_team_score_goal_list)
         return team1,team2,league_name,day_of_week_vi,date_dmy,time_hm,stadium,team1_h2h_stats,home_stats,away_stats,home_goal_pred,away_goal_pred,home_win_prob,away_win_prob,draw_prob,both_team_score_prob,home_goals_probs,away_goals_probs,match_id
     except TypeError as e:
-        return None
-def write_content4turbo(team1,team2,league_name,day_of_week_vi,date_dmy,time_hm,stadium,team1_h2h_stats,home_stats,away_stats,home_goal_pred,away_goal_pred,home_win_prob,away_win_prob,draw_prob,both_team_score_prob):
-        completion = client.chat.completions.create(
-        model = "gpt-3.5-turbo",
-        temperature = 1.0,
-        max_tokens = 2000,
-        messages = [
-            {"role": "system", "content": "bạn là là một chuyên gia sáng tạo nội dung cho website"}, 
-            {"role": "system", "content": "bạn có am hiểu về phân tích và nhận định các trận bóng đá"}, 
-            {"role": "system", "content": "Bạn chỉ đưa ra nhận định dựa trên những số liệu thống kê được cung cấp mà không sử dụng thêm thông tin bên ngoài."}, 
-            {"role": "assistant", "content": f"""Các số liệu thống kê trước trận đấu giữa {team1} và {team2} được trình bày như sau:Trong 5 lần gặp nhau gần nhất giữa {team1} và {team2}, {team1} thắng {team1_h2h_stats['win']} thua {team1_h2h_stats['loss']} và hòa {team1_h2h_stats['draw']} 
-    Trong 5 trận gần nhất của giải đấu {league_name}, {team1} thắng {home_stats['win']}, thua {home_stats['loss']} hòa {home_stats['draw']}.
-    Trong 5 trận gần nhất của giải đấu {league_name} team B thắng {away_stats['win']}, hòa {away_stats['draw']}, thua {away_stats['loss']}. 
-    AI của chúng tôi dự đoán tỉ số của trận đấu này sẽ là {home_goal_pred}-{away_goal_pred}. Xác suất thắng của {team1} là {np.round(100*home_win_prob,2)}%, xác suất thắng của team B là {np.round(100*away_win_prob,2)}%, xác suất để 2 đội hòa nhau là {np.round(100*draw_prob,2)}% và xác suất để cả hai team cùng ghi bàn là {np.round(100*both_team_score_prob,2)}%. """}, 
-            {"role": "user", "content": f"Dựa vào những thông tin trên, hãy viết một bài nhận định và dự đoán về trận đấu giữa chủ nhà {team1} và {team2} diễn ra vào {time_hm} ngày {day_of_week_vi}, {date_dmy} tại {stadium}"},         
-            {"role": "user", "content": "Bài viết phải có sắc thái chuyên nghiệp, khách quan và có tính thuyết phục"},
-            {"role": "user", "content": "Bài viết phải sử dụng toàn bộ các thông tin đã được cung cấp"}]
-            
-        )
-        return completion.choices[0].message.content
-def connect_to_database():
-    return pymysql.connect(
-        host='128.199.228.235', 
-        user='sql_dabanhtructi', 
-        password='FKb75AYJzFMJET8F', 
-        database='sql_dabanhtructi',
-        #connect_timeout=30000,
-        port = 3306
-    )
-def execute_insert(cursor, sql, data):
-    try:
-        cursor.execute(sql, data)
-        return True  # Indicate success
-    except pymysql.OperationalError as e:
-        if e.args[0] in (2006, 2013):  # MySQL server has gone away or Lost connection
-            return False  # Indicate a reconnection is needed
-        else:
-            raise  # Re-raise other exceptions
-
-# Establish a database connection
-def main():
-    match_dict = get_matches(offset_number = 35)
-    cursor = conn.cursor()
-    
-    for keys, values in match_dict.items():
+        print('hahahah') 
+match_dict = get_matches(190,conn,20)
+for keys, values in match_dict.items():
         try:
             match_data = match_dict[keys]
             team1,team2,league_name,day_of_week_vi,date_dmy,time_hm,stadium,team1_h2h_stats,home_stats,away_stats,home_goal_pred,away_goal_pred,home_win_prob,away_win_prob,draw_prob,both_team_score_prob,home_goals_probs,away_goals_probs,match_id = get_match_info(match_data)
-            analysis = write_content4turbo(team1,team2,league_name,day_of_week_vi,date_dmy,time_hm,stadium,team1_h2h_stats,home_stats,away_stats,home_goal_pred,away_goal_pred,home_win_prob,away_win_prob,draw_prob,both_team_score_prob)
-            match_data['analysis'] = analysis
-            print(keys,match_id)
-        except Exception:
-            continue
-    # Create a cursor object
-    for keys, values in match_dict.items():
-        try:
-            match_data = match_dict[keys]
-            _,_,_,_,_,_,_,_,_,_,home_goal_pred,away_goal_pred,home_win_prob,away_win_prob,draw_prob,both_team_score_prob,home_goals_probs,away_goals_probs,match_id = get_match_info(match_data)
-            analysis = match_data['analysis']
-            # SQL INSERT statement
-            sql = "INSERT INTO `wpdbtt_api_analysis` (match_id, home_goal_pred, away_goal_pred, home_win_prob,away_win_prob,draw_prob,both_team_score_prob,home_goals_probs,away_goals_probs,analysis ) VALUES (%s, %s, %s, %s,%s, %s, %s,%s, %s, %s)"
-            
-            # Data to be inserted
-            data = (str(match_id), int(home_goal_pred), int(away_goal_pred), float(home_win_prob),float(away_win_prob),float(draw_prob),float(both_team_score_prob),str(home_goals_probs),str(away_goals_probs),str(analysis))
-            # Execute the query
-            
-            cursor.execute(sql, data)
-            print("Data inserted successfully",str(match_id))
-            time.sleep(5)
+            #analysis = write_content4turbo(team1,team2,league_name,day_of_week_vi,date_dmy,time_hm,stadium,team1_h2h_stats,home_stats,away_stats,home_goal_pred,away_goal_pred,home_win_prob,away_win_prob,draw_prob,both_team_score_prob)
+            #match_data['analysis'] = analysis
+            print(match_id)
         except Exception as e:
-            print(e)
-            continue
-    # Commit the transaction
-    conn.commit()
-    conn.rollback()  # Rollback in case of any error
-    cursor.close()
-    conn.close()
-#get all data to match_dict first including the analysis and insert them to database later to reduce the connecting time
-def main():
-    try:
-        match_dict = get_matches(offset_number=35)
-        conn = connect_to_database()
-        cursor = conn.cursor()
-
-        for keys, values in match_dict.items():
-            try:
-                # existing code to process match data
-                match_data = match_dict[keys]
-                team1,team2,league_name,day_of_week_vi,date_dmy,time_hm,stadium,team1_h2h_stats,home_stats,away_stats,home_goal_pred,away_goal_pred,home_win_prob,away_win_prob,draw_prob,both_team_score_prob,home_goals_probs,away_goals_probs,match_id = get_match_info(match_data)
-                analysis = write_content4turbo(team1,team2,league_name,day_of_week_vi,date_dmy,time_hm,stadium,team1_h2h_stats,home_stats,away_stats,home_goal_pred,away_goal_pred,home_win_prob,away_win_prob,draw_prob,both_team_score_prob)
-                match_data['analysis'] = analysis
-                print(keys, match_id)
-            except Exception as e:
-                print(e)
-                continue
-
-        for keys, values in match_dict.items():
-            try:
-                # existing code to prepare SQL INSERT statement
-                match_data = match_dict[keys]
-                _,_,_,_,_,_,_,_,_,_,home_goal_pred,away_goal_pred,home_win_prob,away_win_prob,draw_prob,both_team_score_prob,home_goals_probs,away_goals_probs,match_id = get_match_info(match_data)
-                analysis = match_data['analysis']
-                # SQL INSERT statement
-                sql = "INSERT INTO `wpdbtt_api_analysis` (match_id, home_goal_pred, away_goal_pred, home_win_prob,away_win_prob,draw_prob,both_team_score_prob,home_goals_probs,away_goals_probs,analysis ) VALUES (%s, %s, %s, %s,%s, %s, %s,%s, %s, %s)"
-                
-                # Data to be inserted
-                data = (str(match_id), int(home_goal_pred), int(away_goal_pred), float(home_win_prob),float(away_win_prob),float(draw_prob),float(both_team_score_prob),str(home_goals_probs),str(away_goals_probs),str(analysis))
-            # Execute the query
-            
-                cursor.execute(sql, data)
-                conn.commit()
-                print("Data inserted successfully", str(match_id))
-                time.sleep(5)
-            except pymysql.OperationalError as e:
-                # Catch specific MySQL connection errors
-                if e.args[0] in (2006, 2013):  # Lost connection errors
-                    print("Lost connection to MySQL server, attempting to reconnect...")
-                    conn = connect_to_database()
-                    cursor = conn.cursor()
-                    cursor.execute(sql, data)  # Re-execute the query
-                    conn.commit()
-                    print("Reconnected and data inserted successfully", str(match_id))
-                else:
-                    print("An error occurred:", e)
-                    conn.rollback()
-            except Exception as e:
-                print("An error occurred:", e)
-                conn.rollback()
-
-        cursor.close()
-        conn.close()
-
-    except Exception as e:
-        print("Error in main function:", e)
-        if conn:
-            conn.rollback()
-
-# Call the main function
-if __name__ == "__main__":
-    main()
-    
+            print(match_dict[keys])
