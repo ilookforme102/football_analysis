@@ -146,6 +146,7 @@ def get_match_info(match_data):
         day_of_week_vi = list_days[time.strftime("%a", time.localtime(unix_time-0*3600))]
         date_dmy =time.strftime("%d/%m/%Y", time.localtime(unix_time-0*3600))
         time_hm= time.strftime("%H:%M", time.localtime(unix_time-0*3600))
+        ########F
         homeaway_h2h = json.loads(match_data['h2h'])[0]['matches']
         ##home and away head2head stats
         #team1 as home 
