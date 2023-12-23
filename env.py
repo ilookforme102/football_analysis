@@ -401,7 +401,9 @@ def run_conditional_main():
         with open(filename, 'w') as file:
             file.write("{}".format(current_offset_number))
     else:
-        print("All data are set")    
+        print("All data are set")
+        with open(filename, 'w') as file:
+            file.write("0")    
 if __name__ == "__main__":
     start = time.time()
     run_conditional_main()
