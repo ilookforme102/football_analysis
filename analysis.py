@@ -244,7 +244,7 @@ def write_content4turbo(team1,team2,league_name,day_of_week_vi,date_dmy,time_hm,
         temperature = 1.0,
         max_tokens = 2000,
         messages = [
-            {"role": "system", "content": "bạn có am hiểu về phân tích và nhận định các trận bóng đá"}, 
+            {"role": "system", "content": "Bạn có am hiểu về phân tích và nhận định các trận bóng đá và đưa ra những phân tích hữu ích dành cho những người chuyên cá cược bóng đá"}, 
             {"role": "system", "content": "Hãy nhấn mạnh rằng AI là người tạo ra các phân tích, nhận định và dự đoán về các tỷ lệ kèo này"}, 
             {"role": "system", "content": "Bạn chỉ đưa ra nhận định dựa trên những số liệu thống kê được cung cấp mà không sử dụng thêm thông tin bên ngoài."}, 
             {"role": "system", "content": f"""Các số liệu thống kê trước trận đấu giữa {team1} và {team2} được trình bày như sau:Trong 5 lần gặp nhau gần nhất giữa {team1} và {team2}, {team1} thắng {team1_h2h_stats['win']} thua {team1_h2h_stats['loss']} và hòa {team1_h2h_stats['draw']} 
@@ -317,16 +317,19 @@ def insert_prediction(current_offset_number,bulk):
                 _,_,_,_,_,_,_,_,_,_,home_goal_pred,away_goal_pred,home_win_prob,away_win_prob,draw_prob,both_team_score_prob,home_goals_probs,away_goals_probs,match_id = get_match_info(match_data)
                 analysis = match_data['analysis']
                 # SQL INSERT statement
-                sql = "INSERT INTO `wpdbtt_api_analysis` (match_id, home_goal_pred, away_goal_pred, home_win_prob,away_win_prob,draw_prob,both_team_score_prob,home_goals_probs,away_goals_probs,analysis ) VALUES (%s, %s, %s, %s,%s, %s, %s,%s, %s, %s)"
-                
-                # Data to be inserted
-                data = (str(match_id), int(home_goal_pred), int(away_goal_pred), float(home_win_prob),float(away_win_prob),float(draw_prob),float(both_team_score_prob),str(home_goals_probs),str(away_goals_probs),str(analysis))
-                # Execute the query
-                
-                cursor.execute(sql, data)
-                conn.commit()
-                print("Data inserted successfully",str(match_id))
-                time.sleep(5)
+                if match_id not in match_ids:
+                    sql = "INSERT INTO `wpdbtt_api_analysis` (match_id, home_goal_pred, away_goal_pred, home_win_prob,away_win_prob,draw_prob,both_team_score_prob,home_goals_probs,away_goals_probs,analysis ) VALUES (%s, %s, %s, %s,%s, %s, %s,%s, %s, %s)"
+                    
+                    # Data to be inserted
+                    data = (str(match_id), int(home_goal_pred), int(away_goal_pred), float(home_win_prob),float(away_win_prob),float(draw_prob),float(both_team_score_prob),str(home_goals_probs),str(away_goals_probs),str(analysis))
+                    # Execute the query
+                    
+                    cursor.execute(sql, data)
+                    conn.commit()
+                    print("Data inserted successfully",str(match_id))
+                    time.sleep(5)
+                else:
+                    print("No need to insert, match is already exist")
         except pymysql.OperationalError as e:
             if e.args[0] in (2006, 2013):
                 print("Lost connection, attempting to reconnect...")
@@ -380,7 +383,7 @@ def main(current_offset_number,bulk):
     except Exception as e:
             print("Error in main:", e)
 def run_conditional_main():
-    bulk = 10
+    bulk = 50
     match_count = count_matches()
     filename = "offset.txt"
     
