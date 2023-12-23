@@ -26,14 +26,16 @@ def connect_to_database():
         database='sql_dabanhtructi',
         #connect_timeout=30000,
         port = 3306)
-def get_matches(offset_number,conn,bulk):
+def get_datetime_obj():
     # Example Unix timestamp
     unix_timestamp_today = time.time() + 0*24*3600  # This is an example timestamp
     # Convert Unix timestamp to datetime object
     dt_object = datetime.datetime.fromtimestamp(unix_timestamp_today)
     # Format the datetime object as a string
     formatted_date_today = dt_object.strftime('%Y-%m-%d')
-
+    return formatted_date_today
+def get_matches(offset_number,conn,bulk):
+    formatted_date_today = get_datetime_obj()
     # Create a cursor object
     cursor = conn.cursor()
 
@@ -90,6 +92,8 @@ def get_matches(offset_number,conn,bulk):
         if row[8] is not None and row[9] is not None:
             match_dict[index] = item
     return match_dict
+def poisson_goal(g,eg):
+    return (math.e**(-eg)*eg**g)/(math.factorial(g))
 def get_match_info(match_data):
     try:
         team1 =  match_data['home_team']
@@ -102,41 +106,49 @@ def get_match_info(match_data):
         day_of_week_vi = list_days[time.strftime("%a", time.localtime(unix_time-0*3600))]
         date_dmy =time.strftime("%d/%m/%Y", time.localtime(unix_time-0*3600))
         time_hm= time.strftime("%H:%M", time.localtime(unix_time-0*3600))
-        homeaway_h2h = json.loads(match_data['h2h'])[0]['matches']
+        ########F
+        
         ##home and away head2head stats
         #team1 as home 
-        team1_h2h_home_scores = []
-        for i in homeaway_h2h:
-            if i['home_name']== team1:
-                team1_h2h_home_scores.append(i['home_scores'][0])
-        #team2 as away
-        team2_h2h_away_scores = []
-        for i in homeaway_h2h:
-            if i['away_name']== team2:
-                team2_h2h_away_scores.append(i['away_scores'][0]) 
-            
-        
+        if match_data['h2h'] is not None:
+            homeaway_h2h = json.loads(match_data['h2h'])[0]['matches']
+            team1_h2h_home_scores = []
+            for i in homeaway_h2h:
+                if i['home_name']== team1:
+                    team1_h2h_home_scores.append(i['home_scores'][0])
+            #team2 as away
+            team2_h2h_away_scores = []
+            for i in homeaway_h2h:
+                if i['away_name']== team2:
+                    team2_h2h_away_scores.append(i['away_scores'][0]) 
+        else:    
+            team1_h2h_home_scores = [0]
+            team2_h2h_away_scores = [0]
         #Avg team 1 h2h home scores 5 recent games
         team1_avg_h2h_home_scores = np.mean(team1_h2h_home_scores[0:5]) if len(team1_h2h_home_scores[0:5]) > 0 else 0
         #Avg team 2 h2h away score 5 recent games
         team2_avg_h2h_away_scores = np.mean(team2_h2h_away_scores[0:5]) if len(team2_h2h_away_scores[0:5]) > 0 else 0
 
         #H2H recents 5 games
-        homeaway_h2h = json.loads(match_data['h2h'])[0]['matches'][0:5]
-        team1_h2h_stats = {'win':0,'draw':0,'loss':0}
-        for i in homeaway_h2h:
-            if i['home_scores'] > i['away_scores']:
-                if i['home_name'] == team1:
-                    team1_h2h_stats['win']+=1
+        
+        if match_data['h2h'] is not None:
+            homeaway_h2h = json.loads(match_data['h2h'])[0]['matches'][0:5]
+            team1_h2h_stats = {'win':0,'draw':0,'loss':0}
+            for i in homeaway_h2h:
+                if i['home_scores'] > i['away_scores']:
+                    if i['home_name'] == team1:
+                        team1_h2h_stats['win']+=1
+                    else:
+                        team1_h2h_stats['loss']+=1
+                elif i['home_scores'] == i['away_scores']:
+                    team1_h2h_stats['draw']+=1
                 else:
-                    team1_h2h_stats['loss']+=1
-            elif i['home_scores'] == i['away_scores']:
-                team1_h2h_stats['draw']+=1
-            else:
-                if i['home_name'] == team1:
-                    team1_h2h_stats['loss']+=1
-                else:
-                    team1_h2h_stats['win']+=1
+                    if i['home_name'] == team1:
+                        team1_h2h_stats['loss']+=1
+                    else:
+                        team1_h2h_stats['win']+=1
+        else:
+            team1_h2h_stats = {'win':0,'draw':0,'loss':0}
         #Team1 stats 5 recent games:
         home_stats = {'win':0,'draw':0,'loss':0}
         homeaway_home  =  json.loads(match_data['home'])[0]['matches'][0:5]
@@ -191,8 +203,7 @@ def get_match_info(match_data):
         #Home and Away EG
         home_eg = (team1_avg_h2h_home_scores + team1_avg_home_gf_scores)/2
         away_eg = (team2_avg_h2h_away_scores + team2_avg_away_gf_scores)/2
-        def poisson_goal(g,eg):
-            return (math.e**(-eg)*eg**g)/(math.factorial(g))
+        
         #Home team goals probabilty, assume goals only in range 0-7
         home_goals_probs = []
         for i in range(0,8):
@@ -226,7 +237,7 @@ def get_match_info(match_data):
         both_team_score_prob = 1 - sum(both_team_score_goal_list)
         return team1,team2,league_name,day_of_week_vi,date_dmy,time_hm,stadium,team1_h2h_stats,home_stats,away_stats,home_goal_pred,away_goal_pred,home_win_prob,away_win_prob,draw_prob,both_team_score_prob,home_goals_probs,away_goals_probs,match_id
     except TypeError as e:
-        return None
+        print(e) 
 def write_content4turbo(team1,team2,league_name,day_of_week_vi,date_dmy,time_hm,stadium,team1_h2h_stats,home_stats,away_stats,home_goal_pred,away_goal_pred,home_win_prob,away_win_prob,draw_prob,both_team_score_prob):
         completion = client.chat.completions.create(
         model = "gpt-3.5-turbo",
@@ -247,22 +258,53 @@ def write_content4turbo(team1,team2,league_name,day_of_week_vi,date_dmy,time_hm,
             
         )
         return completion.choices[0].message.content
-# Write new function call insert_prediction
+#Get list of match_id for specific day    
+def get_match_ids():
+    # Database connection parameters - replace with your actual details
+    formatted_date_today = get_datetime_obj()
+    conn = connect_to_database()    
+    try:
+        with conn.cursor() as cursor:
+            # SQL query
+            sql = """
+            SELECT `match_id` FROM `wpdbtt_api_analysis` a 
+            LEFT JOIN `wpdbtt_api_matches` m ON a.match_id = m.id 
+            WHERE FROM_UNIXTIME(m.match_time, '%Y-%m-%d') = '{}';
+            """.format(formatted_date_today)
 
-# Establish a database connection
+            # Execute the query
+            cursor.execute(sql)
+
+            # Fetch all the rows
+            rows = cursor.fetchall()
+
+            # Extract match_id from each row
+            match_ids = [row[0] for row in rows]
+            return match_ids
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return []
+    finally:
+        # Close the connection
+        conn.close()
+# Write new function call insert_prediction
 def insert_prediction(current_offset_number,bulk):
+    # Establish a database connection
+    match_ids = get_match_ids()
     conn1 = connect_to_database()
     match_dict = get_matches(current_offset_number,conn1,bulk)
     conn1.close()
-    
-    
     for keys, values in match_dict.items():
         try:
             match_data = match_dict[keys]
             team1,team2,league_name,day_of_week_vi,date_dmy,time_hm,stadium,team1_h2h_stats,home_stats,away_stats,home_goal_pred,away_goal_pred,home_win_prob,away_win_prob,draw_prob,both_team_score_prob,home_goals_probs,away_goals_probs,match_id = get_match_info(match_data)
-            analysis = write_content4turbo(team1,team2,league_name,day_of_week_vi,date_dmy,time_hm,stadium,team1_h2h_stats,home_stats,away_stats,home_goal_pred,away_goal_pred,home_win_prob,away_win_prob,draw_prob,both_team_score_prob)
-            match_data['analysis'] = analysis
-            print(keys,match_id)
+            if match_id not in match_ids:
+                analysis = write_content4turbo(team1,team2,league_name,day_of_week_vi,date_dmy,time_hm,stadium,team1_h2h_stats,home_stats,away_stats,home_goal_pred,away_goal_pred,home_win_prob,away_win_prob,draw_prob,both_team_score_prob)
+                match_data['analysis'] = analysis
+                print('Analysis for',keys,match_id, ' has been written')
+            else:
+                print('Analysis for ',keys,match_id, ' is already exist')
         except Exception:
             continue
     # Create a cursor object
@@ -330,8 +372,6 @@ def count_matches():
         # Close the cursor and connection
         cursor.close()
         conn.close()
-#get all data to match_dict first including the analysis and insert them to database later to reduce the connecting time
-
 
 def main(current_offset_number,bulk):
     try:
@@ -340,7 +380,7 @@ def main(current_offset_number,bulk):
     except Exception as e:
             print("Error in main:", e)
 def run_conditional_main():
-    bulk = 50
+    bulk = 10
     match_count = count_matches()
     filename = "offset.txt"
     

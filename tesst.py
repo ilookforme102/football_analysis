@@ -69,7 +69,7 @@ def connect_to_database():
 conn = connect_to_database()
 def get_matches(offset_number,conn,bulk):
     # Example Unix timestamp
-    unix_timestamp_today = time.time() + 0*24*3600  # This is an example timestamp
+    unix_timestamp_today = time.time() -1 *24*3600  # This is an example timestamp
     # Convert Unix timestamp to datetime object
     dt_object = datetime.datetime.fromtimestamp(unix_timestamp_today)
     # Format the datetime object as a string
@@ -132,7 +132,7 @@ def get_matches(offset_number,conn,bulk):
             }
         if row[8] is not None and row[9] is not None:
             match_dict[index] = item
-            print(match_dict[index]['match_id']) 
+            #print(match_dict[index]['match_id']) 
     return match_dict
 def get_match_info(match_data):
     try:
@@ -147,41 +147,48 @@ def get_match_info(match_data):
         date_dmy =time.strftime("%d/%m/%Y", time.localtime(unix_time-0*3600))
         time_hm= time.strftime("%H:%M", time.localtime(unix_time-0*3600))
         ########F
-        homeaway_h2h = json.loads(match_data['h2h'])[0]['matches']
+        
         ##home and away head2head stats
         #team1 as home 
-        team1_h2h_home_scores = []
-        for i in homeaway_h2h:
-            if i['home_name']== team1:
-                team1_h2h_home_scores.append(i['home_scores'][0])
-        #team2 as away
-        team2_h2h_away_scores = []
-        for i in homeaway_h2h:
-            if i['away_name']== team2:
-                team2_h2h_away_scores.append(i['away_scores'][0]) 
-            
-        
+        if match_data['h2h'] is not None:
+            homeaway_h2h = json.loads(match_data['h2h'])[0]['matches']
+            team1_h2h_home_scores = []
+            for i in homeaway_h2h:
+                if i['home_name']== team1:
+                    team1_h2h_home_scores.append(i['home_scores'][0])
+            #team2 as away
+            team2_h2h_away_scores = []
+            for i in homeaway_h2h:
+                if i['away_name']== team2:
+                    team2_h2h_away_scores.append(i['away_scores'][0]) 
+        else:    
+            team1_h2h_home_scores = [0]
+            team2_h2h_away_scores = [0]
         #Avg team 1 h2h home scores 5 recent games
         team1_avg_h2h_home_scores = np.mean(team1_h2h_home_scores[0:5]) if len(team1_h2h_home_scores[0:5]) > 0 else 0
         #Avg team 2 h2h away score 5 recent games
         team2_avg_h2h_away_scores = np.mean(team2_h2h_away_scores[0:5]) if len(team2_h2h_away_scores[0:5]) > 0 else 0
 
         #H2H recents 5 games
-        homeaway_h2h = json.loads(match_data['h2h'])[0]['matches'][0:5]
-        team1_h2h_stats = {'win':0,'draw':0,'loss':0}
-        for i in homeaway_h2h:
-            if i['home_scores'] > i['away_scores']:
-                if i['home_name'] == team1:
-                    team1_h2h_stats['win']+=1
+        
+        if match_data['h2h'] is not None:
+            homeaway_h2h = json.loads(match_data['h2h'])[0]['matches'][0:5]
+            team1_h2h_stats = {'win':0,'draw':0,'loss':0}
+            for i in homeaway_h2h:
+                if i['home_scores'] > i['away_scores']:
+                    if i['home_name'] == team1:
+                        team1_h2h_stats['win']+=1
+                    else:
+                        team1_h2h_stats['loss']+=1
+                elif i['home_scores'] == i['away_scores']:
+                    team1_h2h_stats['draw']+=1
                 else:
-                    team1_h2h_stats['loss']+=1
-            elif i['home_scores'] == i['away_scores']:
-                team1_h2h_stats['draw']+=1
-            else:
-                if i['home_name'] == team1:
-                    team1_h2h_stats['loss']+=1
-                else:
-                    team1_h2h_stats['win']+=1
+                    if i['home_name'] == team1:
+                        team1_h2h_stats['loss']+=1
+                    else:
+                        team1_h2h_stats['win']+=1
+        else:
+            team1_h2h_stats = {'win':0,'draw':0,'loss':0}
         #Team1 stats 5 recent games:
         home_stats = {'win':0,'draw':0,'loss':0}
         homeaway_home  =  json.loads(match_data['home'])[0]['matches'][0:5]
@@ -279,6 +286,6 @@ for keys, values in match_dict.items():
             team1,team2,league_name,day_of_week_vi,date_dmy,time_hm,stadium,team1_h2h_stats,home_stats,away_stats,home_goal_pred,away_goal_pred,home_win_prob,away_win_prob,draw_prob,both_team_score_prob,home_goals_probs,away_goals_probs,match_id = get_match_info(match_data)
             #analysis = write_content4turbo(team1,team2,league_name,day_of_week_vi,date_dmy,time_hm,stadium,team1_h2h_stats,home_stats,away_stats,home_goal_pred,away_goal_pred,home_win_prob,away_win_prob,draw_prob,both_team_score_prob)
             #match_data['analysis'] = analysis
-            print(match_id)
+            print(match_id,stadium)
         except Exception as e:
-            print(match_dict[keys])
+            print(e)
