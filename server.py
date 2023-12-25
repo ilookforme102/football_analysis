@@ -66,8 +66,8 @@ def get_matches(offset_number,conn,bulk):
         WHERE rn = 1) AS away_team ON m.away_team_id = away_team.team_id
     LEFT JOIN `wpdbtt_api_match_h2h` as h 
     ON m.id = h.match_id 
-    WHERE DATE(FROM_UNIXTIME(m.match_time)) >= DATE(NOW()) AND DATE(FROM_UNIXTIME(m.match_time)) <= DATE(NOW() + INTERVAL 0 DAY)
-    ORDER BY `m`.`match_time` DESC
+    WHERE DATE(FROM_UNIXTIME(m.match_time)) >= DATE(NOW()) AND DATE(FROM_UNIXTIME(m.match_time)) <= DATE(NOW() + INTERVAL 2 DAY)
+    ORDER BY `m`.`match_time` ASC
     LIMIT {} OFFSET {}               
     """.format(bulk,offset_number))
 
@@ -91,9 +91,6 @@ def get_matches(offset_number,conn,bulk):
             }
         if row[8] is not None and row[9] is not None:
             match_dict[index] = item
-            print("valid match",row[0])
-        else:
-            print("invalid match", row[0])
     return match_dict
 def poisson_goal(g,eg):
     return (math.e**(-eg)*eg**g)/(math.factorial(g))
@@ -135,11 +132,7 @@ def get_match_info(match_data):
         #H2H recents 5 games
         
         if match_data['h2h'] is not None:
-            #homeaway_h2h = json.loads(match_data['h2h'])[0]['matches'][0:5]
-            all_matches = [match for match in json.loads(match_data['h2h'])[0]['matches']]
-            # Sort the matches by 'match_time'
-            sorted_matches = sorted(all_matches, key=lambda x: x['match_time'],reverse=True)
-            homeaway_h2h = sorted_matches[:5]
+            homeaway_h2h = json.loads(match_data['h2h'])[0]['matches'][0:5]
             team1_h2h_stats = {'win':0,'draw':0,'loss':0}
             for i in homeaway_h2h:
                 if i['home_scores'] > i['away_scores']:
@@ -158,11 +151,7 @@ def get_match_info(match_data):
             team1_h2h_stats = {'win':0,'draw':0,'loss':0}
         #Team1 stats 5 recent games:
         home_stats = {'win':0,'draw':0,'loss':0}
-        #homeaway_home  =  json.loads(match_data['home'])[0]['matches'][0:5]
-        all_matches =  [match for match in json.loads(match_data['home'])[0]['matches']]
-        # Sort the matches by 'match_time'
-        sorted_matches = sorted(all_matches, key=lambda x: x['match_time'],reverse=True)
-        homeaway_home = sorted_matches[:5]
+        homeaway_home  =  json.loads(match_data['home'])[0]['matches'][0:5]
         for i in homeaway_home:
             if i['home_scores'] > i['away_scores']:
                 if i['home_name'] == team1:
@@ -178,10 +167,7 @@ def get_match_info(match_data):
                     home_stats['win']+=1
         #Team2 stats 5 recent games
         away_stats = {'win':0,'draw':0,'loss':0}
-        #homeaway_away =  json.loads(match_data['away'])[0]['matches'][0:5]
-        all_matches =  [match for match in json.loads(match_data['away'])[0]['matches']]
-        sorted_matches = sorted(all_matches, key=lambda x: x['match_time'],reverse=True)
-        homeaway_away = sorted_matches[:5]
+        homeaway_away =  json.loads(match_data['away'])[0]['matches'][0:5]
         for i in homeaway_away:
             if i['home_scores'] > i['away_scores']:
                 if i['home_name'] == team2:
@@ -198,21 +184,14 @@ def get_match_info(match_data):
         #Team1 GA and GF scores
         #team1_home_ga_scores=[]
         team1_home_gf_scores=[]
-        #homeaway_home = json.loads(match_data['home'])[0]['matches']
-        all_matches =  [match for match in json.loads(match_data['home'])[0]['matches']]
-        # Sort the matches by 'match_time'
-        sorted_matches = sorted(all_matches, key=lambda x: x['match_time'],reverse=True)
-        homeaway_home = sorted_matches[:]
+        homeaway_home = json.loads(match_data['home'])[0]['matches']
         for i in homeaway_home:
             if i['home_name']== team1:
                 #team1_home_ga_scores.append(i['home_scores'][0])
                 team1_home_gf_scores.append(i['away_scores'][0])
         team1_avg_home_gf_scores = np.mean(team1_home_gf_scores) if len(team1_home_gf_scores) > 0 else 0
         team2_away_gf_scores=[]
-        #homeaway_away = json.loads(match_data['away'])[0]['matches']
-        all_matches =  [match for match in json.loads(match_data['away'])[0]['matches']]
-        sorted_matches = sorted(all_matches, key=lambda x: x['match_time'],reverse=True)
-        homeaway_away = sorted_matches[:]
+        homeaway_away = json.loads(match_data['away'])[0]['matches']
         for i in homeaway_away:
             if i['away_name']== team2:
                 team2_away_gf_scores.append(i['away_scores'][0])
@@ -290,7 +269,7 @@ def get_match_ids():
             sql = """
             SELECT `match_id` FROM `wpdbtt_api_analysis` a 
             LEFT JOIN `wpdbtt_api_matches` m ON a.match_id = m.id 
-            WHERE DATE(FROM_UNIXTIME(m.match_time)) >= DATE(NOW()) AND DATE(FROM_UNIXTIME(m.match_time)) <= DATE(NOW() + INTERVAL 0 DAY);
+            WHERE DATE(FROM_UNIXTIME(m.match_time)) >= DATE(NOW()) AND DATE(FROM_UNIXTIME(m.match_time)) <= DATE(NOW() + INTERVAL 2 DAY);
             """
 
             # Execute the query
@@ -380,7 +359,7 @@ def count_matches():
         cursor = conn.cursor()
 
         # SQL query
-        sql = "SELECT COUNT(*) as match_number FROM `wpdbtt_api_matches` WHERE DATE(FROM_UNIXTIME(match_time)) >= DATE(NOW()) AND DATE(FROM_UNIXTIME(match_time)) <= DATE(NOW() + INTERVAL 0 DAY);"
+        sql = "SELECT COUNT(*) as match_number FROM `wpdbtt_api_matches` WHERE DATE(FROM_UNIXTIME(match_time)) >= DATE(NOW()) AND DATE(FROM_UNIXTIME(match_time)) <= DATE(NOW() + INTERVAL 2 DAY);"
 
         # Execute the query
         cursor.execute(sql)
@@ -405,9 +384,9 @@ def main(current_offset_number,bulk):
     except Exception as e:
             print("Error in main:", e)
 def run_conditional_main():
-    bulk = 100
+    bulk = 50
     match_count = count_matches()
-    filename = "/www/wwwroot/betting_tips/offset.txt"
+    filename = "offset.txt"
     
     with open(filename, 'r') as file:
         content = file.read()
@@ -420,11 +399,11 @@ def run_conditional_main():
         main(current_offset_number,bulk)
         current_offset_number = current_offset_number + bulk
         with open(filename, 'w') as file:
-            file.write("{}".format(current_offset_number))
+            file.write("0".format(current_offset_number))
     else:
-        print("All data are set")
         with open(filename, 'w') as file:
-            file.write("0")    
+            file.write("0")
+        print("All data are set")    
 if __name__ == "__main__":
     start = time.time()
     run_conditional_main()

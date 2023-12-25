@@ -142,12 +142,12 @@ def get_match_info(match_data):
             homeaway_h2h = sorted_matches[:5]
             team1_h2h_stats = {'win':0,'draw':0,'loss':0}
             for i in homeaway_h2h:
-                if i['home_scores'] > i['away_scores']:
+                if i['home_scores'][1] > i['away_scores'][1]:
                     if i['home_name'] == team1:
                         team1_h2h_stats['win']+=1
                     else:
                         team1_h2h_stats['loss']+=1
-                elif i['home_scores'] == i['away_scores']:
+                elif i['home_scores'][1] == i['away_scores'][1]:
                     team1_h2h_stats['draw']+=1
                 else:
                     if i['home_name'] == team1:
@@ -164,12 +164,12 @@ def get_match_info(match_data):
         sorted_matches = sorted(all_matches, key=lambda x: x['match_time'],reverse=True)
         homeaway_home = sorted_matches[:5]
         for i in homeaway_home:
-            if i['home_scores'] > i['away_scores']:
+            if i['home_scores'][1] > i['away_scores'][1]:
                 if i['home_name'] == team1:
                     home_stats['win']+=1
                 else:
                     home_stats['loss']+=1
-            elif i['home_scores'] == i['away_scores']:
+            elif i['home_scores'][1] == i['away_scores'][1]:
                 home_stats['draw']+=1
             else:
                 if i['home_name'] == team1:
@@ -183,12 +183,12 @@ def get_match_info(match_data):
         sorted_matches = sorted(all_matches, key=lambda x: x['match_time'],reverse=True)
         homeaway_away = sorted_matches[:5]
         for i in homeaway_away:
-            if i['home_scores'] > i['away_scores']:
+            if i['home_scores'][1] > i['away_scores'][1]:
                 if i['home_name'] == team2:
                     away_stats['win']+=1
                 else:
                     away_stats['loss']+=1
-            elif i['home_scores'] == i['away_scores']:
+            elif i['home_scores'][1] == i['away_scores'][1]:
                 away_stats['draw']+=1
             else:
                 if i['home_name'] == team2:
@@ -206,7 +206,7 @@ def get_match_info(match_data):
         for i in homeaway_home:
             if i['home_name']== team1:
                 #team1_home_ga_scores.append(i['home_scores'][0])
-                team1_home_gf_scores.append(i['away_scores'][0])
+                team1_home_gf_scores.append(i['away_scores'][1])
         team1_avg_home_gf_scores = np.mean(team1_home_gf_scores) if len(team1_home_gf_scores) > 0 else 0
         team2_away_gf_scores=[]
         #homeaway_away = json.loads(match_data['away'])[0]['matches']
@@ -215,7 +215,7 @@ def get_match_info(match_data):
         homeaway_away = sorted_matches[:]
         for i in homeaway_away:
             if i['away_name']== team2:
-                team2_away_gf_scores.append(i['away_scores'][0])
+                team2_away_gf_scores.append(i['away_scores'][1])
                 #team2_away_gf_scores.append(i['home_scores'][0])
         team2_avg_away_gf_scores = np.mean(team2_away_gf_scores) if len(team2_away_gf_scores) > 0 else 0
     
@@ -320,115 +320,12 @@ def insert_prediction(current_offset_number,bulk):
         try:
             match_data = match_dict[keys]
             team1,team2,league_name,day_of_week_vi,date_dmy,time_hm,stadium,team1_h2h_stats,home_stats,away_stats,home_goal_pred,away_goal_pred,home_win_prob,away_win_prob,draw_prob,both_team_score_prob,home_goals_probs,away_goals_probs,match_id = get_match_info(match_data)
-            if match_id not in match_ids:
-                analysis = write_content4turbo(team1,team2,league_name,day_of_week_vi,date_dmy,time_hm,stadium,team1_h2h_stats,home_stats,away_stats,home_goal_pred,away_goal_pred,home_win_prob,away_win_prob,draw_prob,both_team_score_prob)
-                match_data['analysis'] = analysis
-                print('Analysis for',keys,match_id, ' has been written')
-            else:
-                print('Analysis for ',keys,match_id, ' is already exist')
-        except Exception:
-            continue
-    # Create a cursor object
-    conn = connect_to_database()
-    cursor = conn.cursor()    
-    for keys, values in match_dict.items():
-        try:
-            match_data = match_dict[keys]
-            if get_match_info(match_data) is not None:
-                _,_,_,_,_,_,_,_,_,_,home_goal_pred,away_goal_pred,home_win_prob,away_win_prob,draw_prob,both_team_score_prob,home_goals_probs,away_goals_probs,match_id = get_match_info(match_data)
-                analysis = match_data['analysis']
-                # SQL INSERT statement
-                if match_id not in match_ids:
-                    sql = "INSERT INTO `wpdbtt_api_analysis` (match_id, home_goal_pred, away_goal_pred, home_win_prob,away_win_prob,draw_prob,both_team_score_prob,home_goals_probs,away_goals_probs,analysis ) VALUES (%s, %s, %s, %s,%s, %s, %s,%s, %s, %s)"
-                    
-                    # Data to be inserted
-                    data = (str(match_id), int(home_goal_pred), int(away_goal_pred), float(home_win_prob),float(away_win_prob),float(draw_prob),float(both_team_score_prob),str(home_goals_probs),str(away_goals_probs),str(analysis))
-                    # Execute the query
-                    
-                    cursor.execute(sql, data)
-                    conn.commit()
-                    print("Data inserted successfully",str(match_id))
-                    time.sleep(5)
-                else:
-                    print("No need to insert, match is already exist")
-        except pymysql.OperationalError as e:
-            if e.args[0] in (2006, 2013):
-                print("Lost connection, attempting to reconnect...")
-                conn.ping(reconnect=True)
-                cursor.execute(sql, data)
-            else:
-                print("An error occurred:", e)
-                conn.rollback()
-        except Exception as e:
+            
+            analysis = "hahahaha"#write_content4turbo(team1,team2,league_name,day_of_week_vi,date_dmy,time_hm,stadium,team1_h2h_stats,home_stats,away_stats,home_goal_pred,away_goal_pred,home_win_prob,away_win_prob,draw_prob,both_team_score_prob)
+            match_data['analysis'] = analysis
+            print('Analysis for',keys,match_id,team1_h2h_stats,home_stats,away_stats, ' has been written')
+        except Exception as e :
             print(e)
-            conn.rollback()
-            continue
-        
-    conn.close()
-#counter rows
-#counter rows
-def count_matches():
-    # Example Unix timestamp
-    unix_timestamp_today = time.time() + 0*24*3600  # This is an example timestamp
-    # Convert Unix timestamp to datetime object
-    dt_object = datetime.datetime.fromtimestamp(unix_timestamp_today)
-    # Format the datetime object as a string
-    formatted_date_today = dt_object.strftime('%Y-%m-%d')
-    conn = connect_to_database()
-    try:
-        # Create a cursor object
-        cursor = conn.cursor()
-
-        # SQL query
-        sql = "SELECT COUNT(*) as match_number FROM `wpdbtt_api_matches` WHERE DATE(FROM_UNIXTIME(match_time)) >= DATE(NOW()) AND DATE(FROM_UNIXTIME(match_time)) <= DATE(NOW() + INTERVAL 0 DAY);"
-
-        # Execute the query
-        cursor.execute(sql)
-
-        # Fetch the result
-        result = cursor.fetchone()
-        if result:
-            return result[0]  # The first element of the result is match_number
-
-    except Exception as e:
-        print(f"An error occurred: {e}")
-
-    finally:
-        # Close the cursor and connection
-        cursor.close()
-        conn.close()
-
-def main(current_offset_number,bulk):
-    try:
-        #conn = connect_to_database()
-        insert_prediction(current_offset_number,bulk)
-    except Exception as e:
-            print("Error in main:", e)
-def run_conditional_main():
-    bulk = 100
-    match_count = count_matches()
-    filename = "/www/wwwroot/betting_tips/offset.txt"
+    # Create a cursor object
     
-    with open(filename, 'r') as file:
-        content = file.read()
-        if content:
-                current_offset_number = int(content)
-        else:
-            current_offset_number = 0
-        
-    if current_offset_number <= match_count:
-        main(current_offset_number,bulk)
-        current_offset_number = current_offset_number + bulk
-        with open(filename, 'w') as file:
-            file.write("{}".format(current_offset_number))
-    else:
-        print("All data are set")
-        with open(filename, 'w') as file:
-            file.write("0")    
-if __name__ == "__main__":
-    start = time.time()
-    run_conditional_main()
-    end = time.time()
-    print("total time: ", end - start)
-     # Close the cursor and connection
-    
+insert_prediction(0,10)
