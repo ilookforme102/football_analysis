@@ -66,7 +66,7 @@ def get_matches(offset_number,conn,bulk):
         WHERE rn = 1) AS away_team ON m.away_team_id = away_team.team_id
     LEFT JOIN `wpdbtt_api_match_h2h` as h 
     ON m.id = h.match_id 
-    WHERE DATE(FROM_UNIXTIME(m.match_time)) >= DATE(NOW()) AND DATE(FROM_UNIXTIME(m.match_time)) <= DATE(NOW() + INTERVAL 0 DAY)
+    WHERE DATE(FROM_UNIXTIME(m.match_time)) >= DATE(NOW()) AND DATE(FROM_UNIXTIME(m.match_time)) <= DATE(NOW() + INTERVAL 2 DAY)
     ORDER BY `m`.`match_time` DESC
     LIMIT {} OFFSET {}               
     """.format(bulk,offset_number))
@@ -97,6 +97,7 @@ def get_matches(offset_number,conn,bulk):
     return match_dict
 def poisson_goal(g,eg):
     return (math.e**(-eg)*eg**g)/(math.factorial(g))
+# Get match info
 def get_match_info(match_data):
     try:
         team1 =  match_data['home_team']
@@ -131,9 +132,7 @@ def get_match_info(match_data):
         team1_avg_h2h_home_scores = np.mean(team1_h2h_home_scores[0:5]) if len(team1_h2h_home_scores[0:5]) > 0 else 0
         #Avg team 2 h2h away score 5 recent games
         team2_avg_h2h_away_scores = np.mean(team2_h2h_away_scores[0:5]) if len(team2_h2h_away_scores[0:5]) > 0 else 0
-
         #H2H recents 5 games
-        
         if match_data['h2h'] is not None:
             #homeaway_h2h = json.loads(match_data['h2h'])[0]['matches'][0:5]
             all_matches = [match for match in json.loads(match_data['h2h'])[0]['matches']]
@@ -259,24 +258,25 @@ def get_match_info(match_data):
         return team1,team2,league_name,day_of_week_vi,date_dmy,time_hm,stadium,team1_h2h_stats,home_stats,away_stats,home_goal_pred,away_goal_pred,home_win_prob,away_win_prob,draw_prob,both_team_score_prob,home_goals_probs,away_goals_probs,match_id
     except TypeError as e:
         print(e) 
+# Write content gpt 3.5
 def write_content4turbo(team1,team2,league_name,day_of_week_vi,date_dmy,time_hm,stadium,team1_h2h_stats,home_stats,away_stats,home_goal_pred,away_goal_pred,home_win_prob,away_win_prob,draw_prob,both_team_score_prob):
         completion = client.chat.completions.create(
         model = "gpt-3.5-turbo",
         temperature = 1.0,
         max_tokens = 2000,
         messages = [
-            {"role": "system", "content": "bạn có am hiểu về phân tích và nhận định các trận bóng đá"}, 
-            {"role": "system", "content": "Hãy nhấn mạnh rằng AI là người tạo ra các phân tích, nhận định và dự đoán về các tỷ lệ kèo này"}, 
+            {"role": "system", "content": "Bạn có am hiểu về phân tích và nhận định, dự đoán về các tỷ lệ kèo trong các trận bóng đá"}, 
+            {"role": "system", "content": "Hãy nhấn mạnh rằng AI là người tạo ra các phân tích này"}, 
             {"role": "system", "content": "Bạn chỉ đưa ra nhận định dựa trên những số liệu thống kê được cung cấp mà không sử dụng thêm thông tin bên ngoài."}, 
             {"role": "system", "content": f"""Các số liệu thống kê trước trận đấu giữa {team1} và {team2} được trình bày như sau:Trong 5 lần gặp nhau gần nhất giữa {team1} và {team2}, {team1} thắng {team1_h2h_stats['win']} thua {team1_h2h_stats['loss']} và hòa {team1_h2h_stats['draw']} 
     Trong 5 trận gần nhất của giải đấu {league_name}, {team1} thắng {home_stats['win']}, thua {home_stats['loss']} hòa {home_stats['draw']}.
     Trong 5 trận gần nhất của giải đấu {league_name} team {team2} thắng {away_stats['win']}, hòa {away_stats['draw']}, thua {away_stats['loss']}. 
     Đu tỉ số của trận đấu này sẽ là {home_goal_pred}-{away_goal_pred}. Xác suất thắng của {team1} là {np.round(100*home_win_prob,2)}%, xác suất thắng của team {team2} là {np.round(100*away_win_prob,2)}%, xác suất để 2 đội hòa nhau là {np.round(100*draw_prob,2)}% và xác suất để cả hai team cùng ghi bàn là {np.round(100*both_team_score_prob,2)}%. """}, 
             {"role": "user", "content": f"Dựa vào những thông tin trên, hãy viết một bài nhận định và dự đoán về trận đấu giữa chủ nhà {team1} và {team2} diễn ra vào {time_hm} ngày {day_of_week_vi}, {date_dmy} tại {stadium}"},         
-            {"role": "user", "content": "Bài viết phải có sắc thái chuyên nghiệp, khách quan và có tính thuyết phục"},
-            #{"role": "user", "content": "Bài viết phải sử dụng toàn bộ các thông tin đã được cung cấp "}
+            {"role": "user", "content": "Bài viết phải có sắc thái chuyên nghiệp, khách quan và có tính thuyết phục "},
+            {"role": "user", "content": "Nội dung bài viết phải tránh đề cập đến nhà cái hay các hình thức cá cược trực tuyến"},
+            {"role": "user", "content": "Bài viết phải có độ dài không vượt quá 400 từ "}
             ]
-            
         )
         return completion.choices[0].message.content
 #Get list of match_id for specific day    
@@ -290,7 +290,7 @@ def get_match_ids():
             sql = """
             SELECT `match_id` FROM `wpdbtt_api_analysis` a 
             LEFT JOIN `wpdbtt_api_matches` m ON a.match_id = m.id 
-            WHERE DATE(FROM_UNIXTIME(m.match_time)) >= DATE(NOW()) AND DATE(FROM_UNIXTIME(m.match_time)) <= DATE(NOW() + INTERVAL 0 DAY);
+            WHERE DATE(FROM_UNIXTIME(m.match_time)) >= DATE(NOW()) AND DATE(FROM_UNIXTIME(m.match_time)) <= DATE(NOW() + INTERVAL 2 DAY);
             """
 
             # Execute the query
@@ -320,12 +320,115 @@ def insert_prediction(current_offset_number,bulk):
         try:
             match_data = match_dict[keys]
             team1,team2,league_name,day_of_week_vi,date_dmy,time_hm,stadium,team1_h2h_stats,home_stats,away_stats,home_goal_pred,away_goal_pred,home_win_prob,away_win_prob,draw_prob,both_team_score_prob,home_goals_probs,away_goals_probs,match_id = get_match_info(match_data)
-            
-            analysis = "hahahaha"#write_content4turbo(team1,team2,league_name,day_of_week_vi,date_dmy,time_hm,stadium,team1_h2h_stats,home_stats,away_stats,home_goal_pred,away_goal_pred,home_win_prob,away_win_prob,draw_prob,both_team_score_prob)
-            match_data['analysis'] = analysis
-            print('Analysis for',keys,match_id,team1_h2h_stats,home_stats,away_stats, ' has been written')
-        except Exception as e :
-            print(e)
+            if match_id not in match_ids:
+                analysis = write_content4turbo(team1,team2,league_name,day_of_week_vi,date_dmy,time_hm,stadium,team1_h2h_stats,home_stats,away_stats,home_goal_pred,away_goal_pred,home_win_prob,away_win_prob,draw_prob,both_team_score_prob)
+                match_data['analysis'] = analysis
+                print('Analysis for',keys,match_id, ' has been written')
+            else:
+                print('Analysis for ',keys,match_id, ' is already exist')
+        except Exception:
+            continue
     # Create a cursor object
+    conn = connect_to_database()
+    cursor = conn.cursor()    
+    for keys, values in match_dict.items():
+        try:
+            match_data = match_dict[keys]
+            if get_match_info(match_data) is not None:
+                _,_,_,_,_,_,_,_,_,_,home_goal_pred,away_goal_pred,home_win_prob,away_win_prob,draw_prob,both_team_score_prob,home_goals_probs,away_goals_probs,match_id = get_match_info(match_data)
+                analysis = match_data['analysis']
+                # SQL INSERT statement
+                if match_id not in match_ids:
+                    sql = "INSERT INTO `wpdbtt_api_analysis` (match_id, home_goal_pred, away_goal_pred, home_win_prob,away_win_prob,draw_prob,both_team_score_prob,home_goals_probs,away_goals_probs,analysis ) VALUES (%s, %s, %s, %s,%s, %s, %s,%s, %s, %s)"
+                    
+                    # Data to be inserted
+                    data = (str(match_id), int(home_goal_pred), int(away_goal_pred), float(home_win_prob),float(away_win_prob),float(draw_prob),float(both_team_score_prob),str(home_goals_probs),str(away_goals_probs),str(analysis))
+                    # Execute the query
+                    
+                    cursor.execute(sql, data)
+                    conn.commit()
+                    print("Data inserted successfully",str(match_id))
+                    time.sleep(5)
+                else:
+                    print("No need to insert, match is already exist")
+        except pymysql.OperationalError as e:
+            if e.args[0] in (2006, 2013):
+                print("Lost connection, attempting to reconnect...")
+                conn.ping(reconnect=True)
+                cursor.execute(sql, data)
+            else:
+                print("An error occurred:", e)
+                conn.rollback()
+        except Exception as e:
+            print(e)
+            conn.rollback()
+            continue
+        
+    conn.close()
+#counter rows
+#counter rows
+def count_matches():
+    # Example Unix timestamp
+    unix_timestamp_today = time.time() + 0*24*3600  # This is an example timestamp
+    # Convert Unix timestamp to datetime object
+    dt_object = datetime.datetime.fromtimestamp(unix_timestamp_today)
+    # Format the datetime object as a string
+    formatted_date_today = dt_object.strftime('%Y-%m-%d')
+    conn = connect_to_database()
+    try:
+        # Create a cursor object
+        cursor = conn.cursor()
+
+        # SQL query
+        sql = "SELECT COUNT(*) as match_number FROM `wpdbtt_api_matches` WHERE DATE(FROM_UNIXTIME(match_time)) >= DATE(NOW()) AND DATE(FROM_UNIXTIME(match_time)) <= DATE(NOW() + INTERVAL 2 DAY);"
+
+        # Execute the query
+        cursor.execute(sql)
+
+        # Fetch the result
+        result = cursor.fetchone()
+        if result:
+            return result[0]  # The first element of the result is match_number
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+    finally:
+        # Close the cursor and connection
+        cursor.close()
+        conn.close()
+
+def main(current_offset_number,bulk):
+    try:
+        #conn = connect_to_database()
+        insert_prediction(current_offset_number,bulk)
+    except Exception as e:
+            print("Error in main:", e)
+def run_conditional_main():
+    bulk = 100
+    match_count = count_matches()
+    filename = "offset.txt"
     
-insert_prediction(0,10)
+    with open(filename, 'r') as file:
+        content = file.read()
+        if content:
+                current_offset_number = int(content)
+        else:
+            current_offset_number = 0
+        
+    if current_offset_number <= match_count:
+        main(current_offset_number,bulk)
+        current_offset_number = current_offset_number + bulk
+        with open(filename, 'w') as file:
+            file.write("{}".format(current_offset_number))
+    else:
+        print("All data are set")
+        with open(filename, 'w') as file:
+            file.write("0")  
+if __name__ == "__main__":
+    start = time.time()
+    run_conditional_main()
+    end = time.time()
+    print("total time: ", end - start)
+     # Close the cursor and connection
+    
