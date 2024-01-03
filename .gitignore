@@ -1,3 +1,4 @@
 *.env
 tt.py
 tesst.py
+*csv
